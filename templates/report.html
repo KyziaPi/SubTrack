@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SubTrack Report</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/report.css') }}">
+</head>
+<body>
+  <header>
+    <h1>SubTrack Report</h1>
+    <p>{{ user.name }} · Generated {{ generated_at }}</p>
+  </header>
+  <section class="summary">
+    <div><span>Monthly Cost</span><strong>{{ symbol }}{{ "%.2f"|format(summary.monthlyTotal) }}</strong></div>
+    <div><span>Annual Cost</span><strong>{{ symbol }}{{ "%.2f"|format(summary.annualTotal) }}</strong></div>
+    <div><span>Active Subscriptions</span><strong>{{ summary.activeCount }}</strong></div>
+    <div><span>Renewing Soon</span><strong>{{ summary.renewingSoonCount }}</strong></div>
+  </section>
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Category</th><th>Cycle</th><th>Renewal</th><th>Monthly</th><th>Annual</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for sub in subscriptions %}
+      <tr>
+        <td>{{ sub.name }}</td>
+        <td>{{ sub.categoryName }}</td>
+        <td>{{ sub.cycle }}</td>
+        <td>{{ sub.renewalDate }}</td>
+        <td>{{ symbol }}{{ "%.2f"|format(sub.monthlyCost) }}</td>
+        <td>{{ symbol }}{{ "%.2f"|format(sub.annualCost) }}</td>
+        <td>{{ sub.status }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <script>window.print();</script>
+</body>
+</html>

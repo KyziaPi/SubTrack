@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SubTrack</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+  <section id="authView" class="auth-view">
+    <form id="authForm" class="auth-panel">
+      <div class="brand">Sub<span>Track</span></div>
+      <p>Track every subscription before it quietly renews.</p>
+      <div class="segmented">
+        <button type="button" id="loginTab" class="active">Sign in</button>
+        <button type="button" id="registerTab">Sign up</button>
+      </div>
+      <label id="nameField">Full name<input id="authName" autocomplete="name"></label>
+      <label>Email<input id="authEmail" type="email" autocomplete="email" required></label>
+      <label>Password<input id="authPassword" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit" id="authSubmit">Sign in</button>
+      <div id="authError" class="form-error"></div>
+    </form>
+  </section>
+
+  <section id="appView" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand small">Sub<span>Track</span></div>
+      <nav>
+        <button class="nav-link active" data-page="dashboard">Dashboard</button>
+        <button class="nav-link" data-page="subscriptions">Subscriptions</button>
+        <button class="nav-link" data-page="upcoming">Upcoming</button>
+        <button class="nav-link" data-page="reports">Reports</button>
+        <button class="nav-link" data-page="settings">Settings</button>
+      </nav>
+      <div class="profile-chip">
+        <div id="avatar" class="avatar">U</div>
+        <div>
+          <strong id="userName">User</strong>
+          <span id="userEmail">email</span>
+        </div>
+      </div>
+      <button id="logoutBtn" class="ghost">Sign out</button>
+    </aside>
+
+    <main>
+      <section id="dashboardPage" class="page active">
+        <header class="page-head">
+          <div>
+            <h1>Dashboard</h1>
+            <p id="dashboardSub">Your subscription overview.</p>
+          </div>
+          <button id="sendRemindersBtn" class="secondary">Send due reminders</button>
+        </header>
+        <div class="stats-grid">
+          <article><span>Monthly Cost</span><strong id="monthlyTotal">-</strong></article>
+          <article><span>Annual Cost</span><strong id="annualTotal">-</strong></article>
+          <article><span>Active</span><strong id="activeCount">-</strong></article>
+          <article><span>Renewing Soon</span><strong id="renewingCount">-</strong></article>
+        </div>
+        <div class="dashboard-grid">
+          <section class="panel">
+            <h2>Spending by Category</h2>
+            <div id="categoryChart" class="bar-list"></div>
+          </section>
+          <section class="panel">
+            <h2>Reminder Notifications</h2>
+            <div id="reminderList" class="stack-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="subscriptionsPage" class="page">
+        <header class="page-head">
+          <div>
+            <h1>Subscriptions</h1>
+            <p>Add, edit, delete, search, and filter your services.</p>
+          </div>
+          <button id="addSubBtn" class="primary">Add subscription</button>
+        </header>
+        <div class="toolbar">
+          <input id="searchInput" type="search" placeholder="Search subscriptions">
+          <select id="categoryFilter"></select>
+          <select id="statusFilter">
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="renewing">Renewing soon</option>
+            <option value="expired">Expired</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Category</th><th>Cycle</th><th>Renewal</th><th>Cost</th><th></th></tr>
+            </thead>
+            <tbody id="subscriptionsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="upcomingPage" class="page">
+        <header class="page-head"><div><h1>Upcoming</h1><p>Renewals ordered by date.</p></div></header>
+        <div id="upcomingList" class="stack-list"></div>
+      </section>
+
+      <section id="reportsPage" class="page">
+        <header class="page-head">
+          <div><h1>Reports</h1><p>Review totals and export subscription data.</p></div>
+          <div class="button-row">
+            <a class="secondary link-button" href="/reports/subscriptions.csv">Export CSV</a>
+            <a class="secondary link-button" href="/reports/print" target="_blank">Open PDF report</a>
+          </div>
+        </header>
+        <section class="panel">
+          <h2>Subscription Report</h2>
+          <div id="reportSummary" class="report-grid"></div>
+        </section>
+      </section>
+
+      <section id="settingsPage" class="page">
+        <header class="page-head"><div><h1>Settings</h1><p>Profile, currency, reminders, and appearance.</p></div></header>
+        <section class="panel settings-grid">
+          <label>Name<input id="profileName"></label>
+          <label>Email<input id="profileEmail" disabled></label>
+          <label>Currency
+            <select id="currencySelect">
+              <option value="PHP">PHP</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="JPY">JPY</option>
+            </select>
+          </label>
+          <label>New category<input id="newCategory" placeholder="Education"></label>
+          <label class="check"><input id="remindSevenDays" type="checkbox"> Remind 7 days before</label>
+          <label class="check"><input id="remindOneDay" type="checkbox"> Remind 1 day before</label>
+          <div class="button-row">
+            <button id="saveSettingsBtn" class="primary">Save settings</button>
+            <button id="addCategoryBtn" class="secondary">Add category</button>
+          </div>
+        </section>
+      </section>
+    </main>
+  </section>
+
+  <div id="subscriptionModal" class="modal-backdrop hidden">
+    <form id="subscriptionForm" class="modal">
+      <h2 id="modalTitle">Add subscription</h2>
+      <label>Name<input id="subName" required></label>
+      <label>Cost<input id="subCost" type="number" min="0" step="0.01" required></label>
+      <label>Billing cycle
+        <select id="subCycle">
+          <option value="weekly">Weekly</option>
+          <option value="monthly" selected>Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </label>
+      <label>Category<select id="subCategory"></select></label>
+      <label>Renewal date<input id="subRenewal" type="date" required></label>
+      <label>Notes<textarea id="subNotes" rows="3"></textarea></label>
+      <div class="button-row right">
+        <button type="button" id="cancelSubBtn" class="ghost">Cancel</button>
+        <button class="primary" type="submit">Save</button>
+      </div>
+      <div id="subError" class="form-error"></div>
+    </form>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
