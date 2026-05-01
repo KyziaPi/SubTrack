@@ -117,7 +117,7 @@
         </section>
       </section>
 
-      <section id="settingsPage" class="page">
+        <section id="settingsPage" class="page">
         <header class="page-head"><div><h1>Settings</h1><p>Profile, currency, reminders, and appearance.</p></div></header>
         <section class="panel settings-grid">
           <label>Name<input id="profileName"></label>
@@ -131,11 +131,17 @@
               <option value="JPY">JPY</option>
             </select>
           </label>
-          <label>New category<input id="newCategory" placeholder="Education"></label>
           <label class="check"><input id="remindSevenDays" type="checkbox"> Remind 7 days before</label>
           <label class="check"><input id="remindOneDay" type="checkbox"> Remind 1 day before</label>
           <div class="button-row">
             <button id="saveSettingsBtn" class="primary">Save settings</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Categories</h2>
+          <label>New category<input id="newCategory" placeholder="Education"></label>
+          <div class="button-row">
             <button id="addCategoryBtn" class="secondary">Add category</button>
           </div>
         </section>
