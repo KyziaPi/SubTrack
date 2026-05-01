@@ -316,10 +316,12 @@ h2 {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow-x: auto;
+  max-width: 100%;
 }
 
 table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
 }
 
