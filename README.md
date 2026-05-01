@@ -30,4 +30,4 @@ python app.py
 
 ## Email Reminders
 
-Reminder emails are sent as test emails (no actual SMTP delivery). The email sending functionality is simplified for testing purposes.
+Reminder emails are sent as test emails. The email sending functionality currently does not work.
