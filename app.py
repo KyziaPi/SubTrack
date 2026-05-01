@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import os
+import sqlite3
 import sys
 import uuid
 from datetime import date, datetime
@@ -21,7 +22,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "subtrack_db.json"
+DB_PATH = DATA_DIR / "subtrack.db"
+LEGACY_JSON_PATH = DATA_DIR / "subtrack_db.json"
 
 DEFAULT_CATEGORIES = [
     {"id": "streaming", "name": "Streaming"},
@@ -49,32 +51,244 @@ def today() -> date:
     return date.today()
 
 
-def empty_db() -> dict:
-    return {"users": [], "subscriptions": [], "categories": DEFAULT_CATEGORIES}
+def get_db_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
+def init_db() -> None:
+    """Initialize the SQLite database with schema."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Users table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            passwordHash TEXT NOT NULL,
+            currency TEXT DEFAULT 'PHP',
+            remindSevenDays INTEGER DEFAULT 1,
+            remindOneDay INTEGER DEFAULT 1,
+            createdAt TEXT NOT NULL
+        )
+    """)
+    
+    # Subscriptions table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS subscriptions (
+            id TEXT PRIMARY KEY,
+            userId TEXT NOT NULL,
+            name TEXT NOT NULL,
+            cost REAL NOT NULL,
+            cycle TEXT NOT NULL,
+            categoryId TEXT NOT NULL,
+            renewalDate TEXT NOT NULL,
+            notes TEXT,
+            createdAt TEXT NOT NULL,
+            FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+    
+    # Categories table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categories (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            userId TEXT,
+            FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+    
+    # Insert default categories if they don't exist
+    for category in DEFAULT_CATEGORIES:
+        cursor.execute(
+            "INSERT OR IGNORE INTO categories (id, name, userId) VALUES (?, ?, NULL)",
+            (category["id"], category["name"])
+        )
+    
+    conn.commit()
+    conn.close()
 
+
+def migrate_from_json() -> None:
+    """Migrate data from legacy JSON format to SQLite if JSON file exists."""
+    if not LEGACY_JSON_PATH.exists():
+        return
+    
+    try:
+        with LEGACY_JSON_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Migrate users
+    for user in data.get("users", []):
+        try:
+            cursor.execute("""
+                INSERT OR IGNORE INTO users 
+                (id, name, email, passwordHash, currency, remindSevenDays, remindOneDay, createdAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                user.get("id"),
+                user.get("name"),
+                user.get("email"),
+                user.get("passwordHash"),
+                user.get("settings", {}).get("currency", "PHP"),
+                1 if user.get("settings", {}).get("remindSevenDays", True) else 0,
+                1 if user.get("settings", {}).get("remindOneDay", True) else 0,
+                user.get("createdAt", datetime.utcnow().isoformat(timespec="seconds") + "Z")
+            ))
+        except sqlite3.IntegrityError:
+            pass
+    
+    # Migrate subscriptions
+    for sub in data.get("subscriptions", []):
+        try:
+            cursor.execute("""
+                INSERT OR IGNORE INTO subscriptions 
+                (id, userId, name, cost, cycle, categoryId, renewalDate, notes, createdAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                sub.get("id"),
+                sub.get("userId"),
+                sub.get("name"),
+                sub.get("cost"),
+                sub.get("cycle"),
+                sub.get("categoryId"),
+                sub.get("renewalDate"),
+                sub.get("notes", ""),
+                sub.get("createdAt", datetime.utcnow().isoformat(timespec="seconds") + "Z")
+            ))
+        except sqlite3.IntegrityError:
+            pass
+    
+    # Migrate custom categories
+    for category in data.get("categories", []):
+        if category.get("userId"):  # Only custom categories
+            try:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO categories (id, name, userId)
+                    VALUES (?, ?, ?)
+                """, (category.get("id"), category.get("name"), category.get("userId")))
+            except sqlite3.IntegrityError:
+                pass
+    
+    conn.commit()
+    conn.close()
 
 
 def ensure_files() -> None:
     DATA_DIR.mkdir(exist_ok=True)
-    if not DB_PATH.exists():
-        write_db(empty_db())
+    init_db()
+    migrate_from_json()
 
 
 def read_db() -> dict:
+    """Read all data from SQLite database and return as dict for compatibility."""
     ensure_files()
-    with DB_PATH.open("r", encoding="utf-8") as file:
-        data = json.load(file)
-    data.setdefault("users", [])
-    data.setdefault("subscriptions", [])
-    data.setdefault("categories", DEFAULT_CATEGORIES)
-    return data
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Fetch users
+    cursor.execute("SELECT * FROM users")
+    users = []
+    for row in cursor.fetchall():
+        users.append({
+            "id": row["id"],
+            "name": row["name"],
+            "email": row["email"],
+            "passwordHash": row["passwordHash"],
+            "settings": {
+                "currency": row["currency"],
+                "remindSevenDays": bool(row["remindSevenDays"]),
+                "remindOneDay": bool(row["remindOneDay"]),
+            },
+            "createdAt": row["createdAt"],
+        })
+    
+    # Fetch subscriptions
+    cursor.execute("SELECT * FROM subscriptions")
+    subscriptions = [dict(row) for row in cursor.fetchall()]
+    
+    # Fetch categories
+    cursor.execute("SELECT * FROM categories")
+    categories = []
+    for row in cursor.fetchall():
+        category = {"id": row["id"], "name": row["name"]}
+        if row["userId"]:
+            category["userId"] = row["userId"]
+        categories.append(category)
+    
+    conn.close()
+    return {
+        "users": users,
+        "subscriptions": subscriptions,
+        "categories": categories,
+    }
 
 
 def write_db(data: dict) -> None:
+    """Write data to SQLite database."""
     DATA_DIR.mkdir(exist_ok=True)
-    DB_PATH.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    ensure_files()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Clear existing data
+    cursor.execute("DELETE FROM subscriptions")
+    cursor.execute("DELETE FROM users")
+    cursor.execute("DELETE FROM categories WHERE userId IS NOT NULL")
+    
+    # Write users
+    for user in data.get("users", []):
+        settings = user.get("settings", default_settings())
+        cursor.execute("""
+            INSERT INTO users (id, name, email, passwordHash, currency, remindSevenDays, remindOneDay, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user["id"],
+            user["name"],
+            user["email"],
+            user["passwordHash"],
+            settings.get("currency", "PHP"),
+            1 if settings.get("remindSevenDays", True) else 0,
+            1 if settings.get("remindOneDay", True) else 0,
+            user.get("createdAt", datetime.utcnow().isoformat(timespec="seconds") + "Z")
+        ))
+    
+    # Write subscriptions
+    for sub in data.get("subscriptions", []):
+        cursor.execute("""
+            INSERT INTO subscriptions (id, userId, name, cost, cycle, categoryId, renewalDate, notes, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            sub["id"],
+            sub["userId"],
+            sub["name"],
+            sub["cost"],
+            sub["cycle"],
+            sub["categoryId"],
+            sub["renewalDate"],
+            sub.get("notes", ""),
+            sub.get("createdAt", datetime.utcnow().isoformat(timespec="seconds") + "Z")
+        ))
+    
+    # Write custom categories
+    for category in data.get("categories", []):
+        if not is_default_category(category["id"]):
+            cursor.execute("""
+                INSERT INTO categories (id, name, userId)
+                VALUES (?, ?, ?)
+            """, (category["id"], category["name"], category.get("userId")))
+    
+    conn.commit()
+    conn.close()
 
 
 def current_user() -> dict | None:
