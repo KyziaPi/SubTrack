@@ -566,11 +566,17 @@ def logout():
 def update_profile():
     payload = parse_json()
     name = normalize_text(payload.get("name"))
+    email = normalize_text(payload.get("email")).lower()
     if not name:
         return jsonify({"error": "Name is required."}), 400
+    if not email:
+        return jsonify({"error": "Email is required."}), 400
     data = read_db()
     user = next(u for u in data["users"] if u["id"] == session["user_id"])
+    if any(other["email"] == email and other["id"] != user["id"] for other in data["users"]):
+        return jsonify({"error": "An account with that email already exists."}), 400
     user["name"] = name
+    user["email"] = email
     user["settings"] = {**default_settings(), **user.get("settings", {}), **payload.get("settings", {})}
     write_db(data)
     return jsonify({"user": public_user(user)})

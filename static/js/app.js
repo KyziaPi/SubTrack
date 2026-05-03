@@ -267,7 +267,11 @@ async function saveSettings() {
   };
   const data = await api("/api/profile", {
     method: "PUT",
-    body: JSON.stringify({ name: $("profileName").value, settings }),
+    body: JSON.stringify({
+      name: $("profileName").value,
+      email: $("profileEmail").value,
+      settings,
+    }),
   });
   state.user = data.user;
   showApp();
